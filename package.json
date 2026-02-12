@@ -1,0 +1,38 @@
+{
+  "name": "veritas-ai-backend",
+  "version": "1.0.0",
+  "description": "Initial Commit ReadMe File.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/16Rohan/veritas-ai-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/16Rohan/veritas-ai-backend/issues"
+  },
+  "homepage": "https://github.com/16Rohan/veritas-ai-backend#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.2.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10"
+  }
+}
