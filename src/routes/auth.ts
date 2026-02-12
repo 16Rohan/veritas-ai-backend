@@ -1,7 +1,9 @@
-import { Router, Request, Response } from 'express';
-import { supabase } from '../lib/supabase';
-import { generateToken } from '../lib/jwt';
-import { authMiddleware } from '../lib/auth-middleware';
+import { Router, Request, Response } from "express";
+import { supabaseAdmin } from "../lib/supabase";
+import { generateToken } from "../lib/jwt";
+import { authMiddleware } from "../lib/auth-middleware";
+import * as bcrypt from "bcryptjs";
+import { v4 as uuidv4 } from "uuid";
 
 const router = Router();
 
@@ -20,103 +22,98 @@ interface SignInRequest extends Request {
   };
 }
 
-// Sign Up
-router.post('/signup', async (req: SignUpRequest, res: Response): Promise<void> => {
+// Sign Up (using admin API to bypass rate limits)
+router.post("/signup", async (req: SignUpRequest, res: Response): Promise<void> => {
   try {
     const { username, email_id, password } = req.body;
 
     if (!username || !email_id || !password) {
-      res.status(400).json({ error: 'Missing required fields' });
+      res.status(400).json({ error: "Missing required fields" });
       return;
     }
 
-    // Check if user already exists
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email_id', email_id)
+    // Check if user already exists in profiles
+    const { data: existingUser } = await supabaseAdmin
+      .from("user-profiles")
+      .select("id")
+      .eq("email_id", email_id)
       .single();
 
     if (existingUser) {
-      res.status(409).json({ error: 'User already exists' });
+      res.status(409).json({ error: "User already exists" });
       return;
     }
 
-    // Create new user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUpWithPassword({
-      email: email_id,
-      password,
-    });
+    // Hash password locally
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const userId = uuidv4();
 
-    if (authError || !authData.user) {
-      res.status(400).json({ error: authError?.message || 'Failed to create user' });
-      return;
-    }
-
-    // Store user info in custom users table
-    const { error: insertError } = await supabase.from('users').insert([
+    // Store user info with hashed password
+    const { error: insertError } = await supabaseAdmin.from("user-profiles").insert([
       {
-        id: authData.user.id,
+        id: userId,
         email_id,
         username,
+        password_hash: hashedPassword,
         subscription_tier: 0,
         created_at: new Date().toISOString(),
       },
     ]);
 
     if (insertError) {
-      console.error('Insert error:', insertError);
-      res.status(400).json({ error: 'Failed to store user data' });
+      console.error("Insert error:", insertError);
+      res.status(400).json({ error: "Failed to store user data" });
       return;
     }
 
     const token = generateToken({
-      id: authData.user.id,
+      id: userId,
       email: email_id,
       name: username,
     });
 
     res.status(201).json({
-      message: 'User created successfully',
+      message: "User created successfully",
       token,
-      user: { id: authData.user.id, email_id, username },
+      user: { id: userId, email_id, username },
     });
   } catch (error) {
-    console.error('Sign up error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Sign up error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // Sign In
-router.post('/signin', async (req: SignInRequest, res: Response): Promise<void> => {
+router.post("/signin", async (req: SignInRequest, res: Response): Promise<void> => {
   try {
     const { email_id, password } = req.body;
 
+    console.log("Signin attempt for:", email_id);
+
     if (!email_id || !password) {
-      res.status(400).json({ error: 'Missing email or password' });
+      res.status(400).json({ error: "Missing email or password" });
       return;
     }
 
-    // Authenticate with Supabase
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: email_id,
-      password,
-    });
-
-    if (authError || !authData.user) {
-      res.status(401).json({ error: 'Invalid credentials' });
-      return;
-    }
-
-    // Get user info from custom users table
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('id, email_id, username')
-      .eq('id', authData.user.id)
+    // Fetch user from database
+    const { data: userData, error: userError } = await supabaseAdmin
+      .from("user-profiles")
+      .select("id, email_id, username, password_hash")
+      .eq("email_id", email_id)
       .single();
 
     if (userError || !userData) {
-      res.status(400).json({ error: 'User not found' });
+      console.error("User not found:", email_id);
+      res.status(401).json({ error: "Invalid email or password" });
+      return;
+    }
+
+    // Verify password
+    const passwordMatch = await bcrypt.compare(password, userData.password_hash);
+
+    if (!passwordMatch) {
+      console.error("Invalid password for:", email_id);
+      res.status(401).json({ error: "Invalid email or password" });
       return;
     }
 
@@ -126,29 +123,38 @@ router.post('/signin', async (req: SignInRequest, res: Response): Promise<void> 
       name: userData.username,
     });
 
+    console.log("Signin successful for:", userData.id);
+
     res.status(200).json({
-      message: 'Sign in successful',
+      message: "Sign in successful",
       token,
       user: { id: userData.id, email_id: userData.email_id, username: userData.username },
     });
   } catch (error) {
-    console.error('Sign in error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Sign in error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // Verify Token
-router.get('/verify', authMiddleware, (req: Request, res: Response) => {
+router.get("/verify", authMiddleware, (req: Request, res: Response) => {
   res.status(200).json({
-    message: 'Token is valid',
+    message: "Token is valid",
     user: req.user,
   });
 });
 
 // Get Current User
-router.get('/me', authMiddleware, (req: Request, res: Response) => {
+router.get("/me", authMiddleware, (req: Request, res: Response) => {
   res.status(200).json({
     user: req.user,
+  });
+});
+
+// Logout (client-side token removal is handled by frontend)
+router.post("/logout", authMiddleware, (req: Request, res: Response) => {
+  res.status(200).json({
+    message: "Logout successful",
   });
 });
 

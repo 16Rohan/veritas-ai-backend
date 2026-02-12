@@ -1,0 +1,10 @@
+@echo off
+setlocal enabledelayedexpansion
+
+set PORT=5000
+set SUPABASE_URL=https://qjmirmenxsmxlqtcihkh.supabase.co
+set SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqbWlybWVueHNteGxxdGNpaGtoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4NTU2MTEsImV4cCI6MjA4NjQzMTYxMX0.ohMCmSXRXIB_0TZ6QJTqxE_j7EM84nGxwHeY3agZqKE
+set JWT_SECRET=dev_jwt_secret_key_12345
+set NODE_ENV=development
+
+npm run dev
